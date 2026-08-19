@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Orbit Data Ingestion Pipeline</title>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --panel: #131a2b;
+    --panel-border: #232d45;
+    --text: #e6e9f2;
+    --text-dim: #8a93ab;
+    --accent: #6c8cff;
+    --accent-soft: rgba(108, 140, 255, 0.12);
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  header {
+    padding: 40px 32px 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  header h1 {
+    font-size: 28px;
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+  }
+  header p.tagline {
+    color: var(--text-dim);
+    margin: 0 0 4px;
+    font-size: 15px;
+  }
+  header .badges { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid rgba(108,140,255,0.25);
+    padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 500;
+  }
+  .badge.open { color: var(--good); background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.25); }
+  .badge.demo { color: var(--warn); background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.25); }
+  .badge.live { color: var(--good); background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.25); }
+  main { max-width: 1200px; margin: 0 auto; padding: 0 32px 60px; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin: 24px 0 36px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+  }
+  .stat-card .value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .stat-card .label { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
+
+  section { margin-bottom: 40px; }
+  section h2 {
+    font-size: 16px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-dim); font-weight: 600; margin: 0 0 14px;
+  }
+
+  .breakdown-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 800px) { .breakdown-grid { grid-template-columns: 1fr; } }
+
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13.5px; }
+  .bar-row .bar-label { width: 150px; flex-shrink: 0; color: var(--text-dim); text-transform: capitalize; }
+  .bar-row .bar-track { flex: 1; background: var(--panel-border); border-radius: 6px; height: 8px; overflow: hidden; }
+  .bar-row .bar-fill { height: 100%; background: var(--accent); border-radius: 6px; }
+  .bar-row .bar-count { width: 36px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .controls {
+    display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .controls input, .controls select {
+    background: var(--panel); border: 1px solid var(--panel-border); color: var(--text);
+    padding: 9px 12px; border-radius: 8px; font-size: 13.5px; outline: none;
+  }
+  .controls input { flex: 1; min-width: 200px; }
+  .controls input:focus, .controls select:focus { border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th {
+    text-align: left; color: var(--text-dim); font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 10px 12px; border-bottom: 1px solid var(--panel-border);
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--panel-border); vertical-align: top; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  tbody a { color: var(--accent); text-decoration: none; }
+  tbody a:hover { text-decoration: underline; }
+  .type-chip {
+    display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11.5px;
+    background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+  }
+  .desc-cell { color: var(--text-dim); max-width: 360px; }
+  .table-wrap { max-height: 560px; overflow-y: auto; border: 1px solid var(--panel-border); border-radius: var(--radius); }
+  .table-wrap table thead th { position: sticky; top: 0; background: var(--panel); }
+  .row-count { color: var(--text-dim); font-size: 13px; margin-top: 8px; }
+
+  .endpoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .endpoint-card {
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: var(--radius);
+    padding: 14px 16px; text-decoration: none; color: var(--text); display: block;
+    transition: border-color 0.15s;
+  }
+  .endpoint-card:hover { border-color: var(--accent); }
+  .endpoint-card code { color: var(--accent); font-size: 13px; }
+  .endpoint-card p { margin: 4px 0 0; color: var(--text-dim); font-size: 12.5px; }
+
+  .empty-state {
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: var(--radius);
+    padding: 40px; text-align: center; color: var(--text-dim);
+  }
+  .empty-state button {
+    margin-top: 16px; background: var(--accent); color: white; border: none;
+    padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;
+  }
+  footer { text-align: center; color: var(--text-dim); font-size: 12.5px; padding: 20px 32px 40px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI Orbit Data Ingestion Pipeline</h1>
+  <p class="tagline">Discovery → Extraction → Cleaning → Normalization → Entity Resolution → Classification → Relationship Mapping → Validation</p>
+  <div class="badges">
+    <span class="badge open">No login required</span>
+    {% if has_data %}
+    <span class="badge">{{ report.final_entity_count }} entities</span>
+    <span class="badge">{{ relationships|length }} relationships</span>
+    <span class="badge">{{ report.duplicates_merged }} duplicates merged</span>
+    {% endif %}
+  </div>
+</header>
+
+<main>
+{% if not has_data %}
+  <div class="empty-state">
+    <p>No data has been generated yet.</p>
+    <button onclick="fetch('/run?demo=true', {method:'POST'}).then(()=>alert('Pipeline started — refresh in a few seconds.'))">Run pipeline now</button>
+  </div>
+{% else %}
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="value">{{ report.final_entity_count }}</div><div class="label">Final entities</div></div>
+    <div class="stat-card"><div class="value">{{ relationships|length }}</div><div class="label">Relationships</div></div>
+    <div class="stat-card"><div class="value">{{ report.duplicates_merged }}</div><div class="label">Duplicates merged</div></div>
+    <div class="stat-card"><div class="value">{{ report.entities_by_source|length }}</div><div class="label">Sources</div></div>
+    <div class="stat-card"><div class="value">{{ report.invalid_entities }}</div><div class="label">Invalid entities</div></div>
+  </div>
+
+  <section>
+    <h2>Data sources — live vs. demo</h2>
+    <div class="endpoints">
+      {% for source, notes in source_run_notes.items() %}
+      <div class="endpoint-card" style="cursor: default;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <code>{{ source }}</code>
+          {% if notes.used_demo_fallback %}
+            <span class="badge demo">Demo fallback</span>
+          {% else %}
+            <span class="badge live">Live API</span>
+          {% endif %}
+        </div>
+        <p>{{ notes.entities }} entities, {{ notes.discovered }} discovered{% if notes.errors %}, {{ notes.errors|length }} error(s){% endif %}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Breakdown</h2>
+    <div class="breakdown-grid">
+      <div>
+        <div class="bar-row" style="margin-bottom:12px;"><span class="bar-label" style="width:auto;font-weight:600;color:var(--text);">By entity type</span></div>
+        {% for type, count in entities_by_type %}
+        <div class="bar-row">
+          <span class="bar-label">{{ type.replace('_',' ') }}</span>
+          <span class="bar-track"><span class="bar-fill" style="width: {{ (count / max_type_count * 100)|round(1) }}%"></span></span>
+          <span class="bar-count">{{ count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <div>
+        <div class="bar-row" style="margin-bottom:12px;"><span class="bar-label" style="width:auto;font-weight:600;color:var(--text);">By source</span></div>
+        {% for source, count in entities_by_source %}
+        <div class="bar-row">
+          <span class="bar-label" style="text-transform:none;">{{ source }}</span>
+          <span class="bar-track"><span class="bar-fill" style="width: {{ (count / max_source_count * 100)|round(1) }}%"></span></span>
+          <span class="bar-count">{{ count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Entities ({{ entities|length }})</h2>
+    <div class="controls">
+      <input id="searchBox" type="text" placeholder="Search by name or description..." onkeyup="filterTable()">
+      <select id="typeFilter" onchange="filterTable()">
+        <option value="">All types</option>
+        {% for type, _ in entities_by_type %}
+        <option value="{{ type }}">{{ type.replace('_',' ')|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table id="entityTable">
+        <thead>
+          <tr><th>Name</th><th>Type</th><th>Description</th><th>Source</th></tr>
+        </thead>
+        <tbody>
+          {% for e in entities %}
+          <tr data-type="{{ e.entity_type }}" data-search="{{ (e.name ~ ' ' ~ (e.description or ''))|lower }}">
+            <td>{% if e.url %}<a href="{{ e.url }}" target="_blank" rel="noopener">{{ e.name }}</a>{% else %}{{ e.name }}{% endif %}</td>
+            <td><span class="type-chip">{{ e.entity_type.replace('_',' ') }}</span></td>
+            <td class="desc-cell">{{ (e.description or '')[:140] }}{% if e.description and e.description|length > 140 %}…{% endif %}</td>
+            <td>{{ e.source.name }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="row-count" id="rowCount"></div>
+  </section>
+
+  <section>
+    <h2>Relationships ({{ relationships|length }})</h2>
+    <div class="table-wrap" style="max-height: 320px;">
+      <table>
+        <thead><tr><th>Source</th><th>Relationship</th><th>Target</th><th>Confidence</th></tr></thead>
+        <tbody>
+          {% for r in relationships %}
+          <tr>
+            <td>{{ entity_names.get(r.source_id, r.source_id[:8]) }}</td>
+            <td><span class="type-chip">{{ r.relationship }}</span></td>
+            <td>{{ entity_names.get(r.target_id, r.target_id[:8]) }}</td>
+            <td>{{ "%.2f"|format(r.confidence) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+{% endif %}
+
+  <section>
+    <h2>API endpoints</h2>
+    <div class="endpoints">
+      <a class="endpoint-card" href="/entities"><code>GET /entities</code><p>All collected entities as JSON</p></a>
+      <a class="endpoint-card" href="/relationships"><code>GET /relationships</code><p>All relationships as JSON</p></a>
+      <a class="endpoint-card" href="/quality-report"><code>GET /quality-report</code><p>Full data quality report</p></a>
+      <a class="endpoint-card" href="/docs"><code>GET /docs</code><p>Interactive Swagger UI</p></a>
+      <a class="endpoint-card" href="/status"><code>GET /status</code><p>Pipeline run status</p></a>
+    </div>
+  </section>
+</main>
+
+<footer>AI Orbit Data Ingestion Pipeline — API-first, no authentication required.</footer>
+
+<script>
+function filterTable() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const type = document.getElementById('typeFilter').value;
+  const rows = document.querySelectorAll('#entityTable tbody tr');
+  let visible = 0;
+  rows.forEach(row => {
+    const matchesSearch = !q || row.dataset.search.includes(q);
+    const matchesType = !type || row.dataset.type === type;
+    const show = matchesSearch && matchesType;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('rowCount').textContent = `Showing ${visible} of ${rows.length}`;
+}
+document.addEventListener('DOMContentLoaded', filterTable);
+</script>
+
+</body>
+</html>
